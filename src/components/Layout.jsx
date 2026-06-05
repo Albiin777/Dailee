@@ -72,9 +72,7 @@ function Layout() {
     if (saved) {
       return saved;
     }
-    return window.matchMedia("(prefers-color-scheme: dark)").matches
-      ? "dark"
-      : "light";
+    return "light";
   });
 
   useEffect(() => {
@@ -135,6 +133,47 @@ function Layout() {
 
     return () => {
       window.removeEventListener("scroll", handleScroll);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return undefined;
+    }
+
+    const revealElements = document.querySelectorAll("main section");
+    revealElements.forEach((element) => {
+      element.classList.add("reveal-section");
+    });
+
+    if (!("IntersectionObserver" in window)) {
+      revealElements.forEach((element) => {
+        element.classList.add("is-visible");
+      });
+      return undefined;
+    }
+
+    const observer = new IntersectionObserver(
+      (entriesList) => {
+        entriesList.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("is-visible");
+            observer.unobserve(entry.target);
+          }
+        });
+      },
+      {
+        rootMargin: "0px 0px -10% 0px",
+        threshold: 0.12,
+      }
+    );
+
+    revealElements.forEach((element) => {
+      observer.observe(element);
+    });
+
+    return () => {
+      observer.disconnect();
     };
   }, []);
 

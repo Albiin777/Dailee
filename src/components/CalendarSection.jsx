@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { FiChevronLeft, FiChevronRight, FiImage } from "react-icons/fi";
+import { useEffect, useMemo, useState } from "react";
+import { FiChevronLeft, FiChevronRight, FiImage, FiX } from "react-icons/fi";
 
 const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const emptyEntry = {
@@ -40,8 +40,12 @@ function hasEntryData(entry) {
   return Boolean(
     entry?.technical?.title ||
       entry?.technical?.description ||
+      entry?.technical?.screenshotName ||
+      entry?.technical?.screenshotUrl ||
       entry?.nonTechnical?.title ||
-      entry?.nonTechnical?.description
+      entry?.nonTechnical?.description ||
+      entry?.nonTechnical?.screenshotName ||
+      entry?.nonTechnical?.screenshotUrl
   );
 }
 
@@ -67,9 +71,10 @@ function buildCalendarDays(monthDate) {
   ];
 }
 
-function EntryPreview({ label, entry }) {
+function EntryPreview({ label, entry, onOpenImage }) {
   const hasContent =
     entry?.title || entry?.description || entry?.screenshotName || entry?.screenshotUrl;
+  const imageAlt = entry?.screenshotName || `${label} uploaded image`;
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-[#fcfcfc] p-4 dark:border-white/10 dark:bg-[#101010]">
@@ -82,16 +87,32 @@ function EntryPreview({ label, entry }) {
             <p className="font-medium text-black dark:text-white">{entry.title}</p>
           )}
           {entry.description && <p>{entry.description}</p>}
-          {(entry.screenshotName || entry.screenshotUrl) && (
-            <a
-              href={entry.screenshotUrl || "#"}
-              target={entry.screenshotUrl ? "_blank" : undefined}
-              rel={entry.screenshotUrl ? "noreferrer" : undefined}
-              className="inline-flex items-center gap-2 text-xs text-gray-500 underline-offset-4 hover:underline dark:text-gray-400"
+          {entry.screenshotUrl && (
+            <button
+              type="button"
+              onClick={() =>
+                onOpenImage({
+                  src: entry.screenshotUrl,
+                  alt: imageAlt,
+                  name: entry.screenshotName || "Uploaded image",
+                })
+              }
+              className="block w-full overflow-hidden rounded-xl border border-gray-200 bg-white transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-gray-400 dark:border-white/10 dark:bg-[#171717] dark:focus:ring-white/40"
+              aria-label={`Open ${imageAlt}`}
             >
+              <img
+                src={entry.screenshotUrl}
+                alt={imageAlt}
+                className="max-h-48 w-full object-contain"
+                loading="lazy"
+              />
+            </button>
+          )}
+          {(entry.screenshotName || entry.screenshotUrl) && (
+            <div className="inline-flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
               <FiImage />
-              {entry.screenshotName || "Uploaded image"}
-            </a>
+              <span>{entry.screenshotName || "Uploaded image"}</span>
+            </div>
           )}
         </div>
       ) : (
@@ -109,12 +130,30 @@ function CalendarSection({ entries }) {
     () => new Date(new Date().getFullYear(), new Date().getMonth(), 1)
   );
   const [selectedDate, setSelectedDate] = useState(todayKey);
+  const [openImage, setOpenImage] = useState(null);
   const calendarDays = useMemo(
     () => buildCalendarDays(visibleMonth),
     [visibleMonth]
   );
   const selectedEntry = entries[selectedDate] || emptyEntry;
   const savedCount = Object.values(entries).filter(hasEntryData).length;
+
+  useEffect(() => {
+    if (!openImage) {
+      return undefined;
+    }
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setOpenImage(null);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [openImage]);
 
   const changeMonth = (offset) => {
     setVisibleMonth(
@@ -217,14 +256,48 @@ function CalendarSection({ entries }) {
             {formatSelectedDate(selectedDate)}
           </h3>
           <div className="mt-5 space-y-3">
-            <EntryPreview label="Technical" entry={selectedEntry.technical} />
+            <EntryPreview
+              label="Technical"
+              entry={selectedEntry.technical}
+              onOpenImage={setOpenImage}
+            />
             <EntryPreview
               label="Non-Technical"
               entry={selectedEntry.nonTechnical}
+              onOpenImage={setOpenImage}
             />
           </div>
         </aside>
       </div>
+
+      {openImage && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-label={openImage.name}
+          onClick={() => setOpenImage(null)}
+        >
+          <div
+            className="relative flex max-h-[90vh] max-w-[94vw] items-center justify-center"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setOpenImage(null)}
+              className="absolute -right-2 -top-12 flex h-10 w-10 items-center justify-center rounded-full bg-white text-black shadow-lg transition hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-white dark:bg-[#161616] dark:text-white dark:hover:bg-[#222]"
+              aria-label="Close image preview"
+            >
+              <FiX />
+            </button>
+            <img
+              src={openImage.src}
+              alt={openImage.alt}
+              className="max-h-[85vh] max-w-[90vw] rounded-xl object-contain shadow-2xl"
+            />
+          </div>
+        </div>
+      )}
     </section>
   );
 }

@@ -8,10 +8,19 @@
 	--font-sans: "Montserrat", "Roboto", "Doto", "IBM Plex Sans", "Oxygen", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
 	--font-heading: "Montserrat", "Doto", "Roboto", system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial;
 	--font-mono: "IBM Plex Mono", "Roboto Mono", "Menlo", "Monaco", "ui-monospace", "SFMono-Regular", "monospace";
+	--ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+html {
+	scroll-behavior: smooth;
 }
 
 * {
 	font-family: var(--font-sans);
+}
+
+body {
+	-webkit-font-smoothing: antialiased;
 }
 
 body {
@@ -41,7 +50,184 @@ samp {
 	font-family: var(--font-mono);
 }
 
-html.dark body {
-	background-color: #0b0b0b;
-	color: #f5f5f5;
+:where(a, button, input, textarea, select) {
+	transition:
+		background-color 180ms var(--ease-smooth),
+		border-color 180ms var(--ease-smooth),
+		box-shadow 180ms var(--ease-smooth),
+		color 180ms var(--ease-smooth),
+		opacity 180ms var(--ease-smooth),
+		transform 180ms var(--ease-smooth);
+}
+
+:where(a, button):not(:disabled):hover {
+	transform: translateY(-1px);
+}
+
+:where(a, button):not(:disabled):active {
+	transform: translateY(0);
+}
+
+.reveal-section {
+	opacity: 0;
+	filter: blur(3px);
+	transform: translate3d(0, 18px, 0);
+	transition:
+		opacity 680ms var(--ease-smooth),
+		filter 680ms var(--ease-smooth),
+		transform 680ms var(--ease-smooth);
+	will-change: opacity, filter, transform;
+}
+
+.reveal-section.is-visible {
+	opacity: 1;
+	filter: blur(0);
+	transform: translate3d(0, 0, 0);
+	will-change: auto;
+}
+
+@media (min-width: 768px) {
+	.reveal-section {
+		transform: translate3d(0, 24px, 0);
+	}
+}
+
+[role="dialog"] {
+	animation: dailee-fade-in 180ms var(--ease-smooth) both;
+}
+
+.landing-title,
+.landing-copy,
+.landing-action,
+.landing-date,
+.landing-scroll {
+	animation: landing-rise 760ms var(--ease-smooth) both;
+}
+
+.landing-title {
+	animation-delay: 80ms;
+}
+
+.landing-copy {
+	animation-delay: 180ms;
+}
+
+.landing-action {
+	animation-delay: 280ms;
+}
+
+.landing-date {
+	animation-delay: 360ms;
+}
+
+.landing-scroll {
+	animation-delay: 430ms;
+}
+
+.landing-scroll span:last-child {
+	animation: landing-scroll-pulse 1.9s var(--ease-smooth) infinite;
+	transform-origin: top;
+}
+
+.landing-daymark {
+	animation: landing-daymark-in 900ms var(--ease-smooth) both;
+}
+
+.landing-pattern {
+	animation: landing-pattern-drift 18s ease-in-out infinite alternate;
+}
+
+.landing-pattern-slow {
+	animation-duration: 24s;
+	animation-direction: alternate-reverse;
+}
+
+@keyframes landing-rise {
+	from {
+		opacity: 0;
+		filter: blur(4px);
+		transform: translate3d(0, 14px, 0);
+	}
+	to {
+		opacity: 1;
+		filter: blur(0);
+		transform: translate3d(0, 0, 0);
+	}
+}
+
+@keyframes landing-daymark-in {
+	from {
+		opacity: 0;
+		transform: translate3d(-50%, 12px, 0) scale(0.985);
+	}
+	to {
+		transform: translate3d(-50%, 0, 0) scale(1);
+	}
+}
+
+@keyframes landing-pattern-drift {
+	from {
+		background-position: 0 0;
+	}
+	to {
+		background-position: 18px 14px;
+	}
+}
+
+@keyframes landing-scroll-pulse {
+	0%,
+	100% {
+		opacity: 0.55;
+		transform: scaleY(0.72);
+	}
+	50% {
+		opacity: 1;
+		transform: scaleY(1);
+	}
+}
+
+@keyframes dailee-fade-in {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	html {
+		scroll-behavior: auto;
+	}
+
+	*,
+	*::before,
+	*::after {
+		animation-duration: 1ms !important;
+		animation-iteration-count: 1 !important;
+		scroll-behavior: auto !important;
+		transition-duration: 1ms !important;
+	}
+
+	:where(a, button):not(:disabled):hover {
+		transform: none;
+	}
+
+	.reveal-section {
+		opacity: 1;
+		filter: none;
+		transform: none;
+	}
+
+	.landing-title,
+	.landing-copy,
+	.landing-action,
+	.landing-date,
+	.landing-scroll,
+	.landing-scroll span:last-child,
+	.landing-daymark,
+	.landing-pattern,
+	.landing-pattern-slow {
+		animation: none;
+	}
 }
