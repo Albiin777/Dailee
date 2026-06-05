@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from "react";
-import { FiUploadCloud } from "react-icons/fi";
+import { FiCamera, FiUploadCloud } from "react-icons/fi";
 
 function hasEntryContent(entry) {
   return Boolean(
@@ -23,6 +23,7 @@ function EntryForm({ title, value, onSave, onUploadImage }) {
   const [isUploading, setIsUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [fileError, setFileError] = useState("");
+  const [titleError, setTitleError] = useState("");
   const [saveError, setSaveError] = useState("");
   const [saveStatus, setSaveStatus] = useState("");
   const isSaved = hasEntryContent(value);
@@ -36,6 +37,7 @@ function EntryForm({ title, value, onSave, onUploadImage }) {
       cloudinaryPublicId: value?.cloudinaryPublicId || "",
     });
     setIsEditing(!hasEntryContent(value));
+    setTitleError("");
   }, [value]);
 
   const handleFileChange = async (event) => {
@@ -71,12 +73,22 @@ function EntryForm({ title, value, onSave, onUploadImage }) {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    const trimmedTitle = formData.title.trim();
+
+    if (!trimmedTitle) {
+      setTitleError("Add a title before saving.");
+      setSaveStatus("");
+      return;
+    }
+
     setIsSaving(true);
+    setTitleError("");
     setSaveError("");
     setSaveStatus("");
     try {
       await onSave({
         ...formData,
+        title: trimmedTitle,
         savedAt: new Date().toISOString(),
       });
       setSaveStatus("Saved to Firestore");
@@ -109,15 +121,28 @@ function EntryForm({ title, value, onSave, onUploadImage }) {
           id={`${inputId}-title`}
           value={formData.title}
           disabled={!isEditing}
-          onChange={(event) =>
+          onChange={(event) => {
+            if (titleError) {
+              setTitleError("");
+            }
             setFormData((current) => ({
               ...current,
               title: event.target.value,
-            }))
-          }
-          className="mt-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-black focus:border-black focus:outline-none disabled:bg-gray-50 disabled:text-gray-500 dark:border-white/10 dark:bg-[#121212] dark:text-white dark:focus:border-white dark:disabled:bg-white/5 dark:disabled:text-gray-400"
+            }));
+          }}
+          aria-invalid={Boolean(titleError)}
+          className={`mt-2 w-full rounded-lg border bg-white px-3 py-2 text-sm text-black focus:outline-none disabled:bg-gray-50 disabled:text-gray-500 dark:bg-[#121212] dark:text-white dark:disabled:bg-white/5 dark:disabled:text-gray-400 ${
+            titleError
+              ? "border-red-400 focus:border-red-500 dark:border-red-400 dark:focus:border-red-300"
+              : "border-gray-200 focus:border-black dark:border-white/10 dark:focus:border-white"
+          }`}
           placeholder={title === "Technical" ? "What did you work on?" : "What did you do?"}
         />
+        {titleError && (
+          <p className="mt-2 text-xs font-medium text-red-500 dark:text-red-300">
+            {titleError}
+          </p>
+        )}
       </div>
 
       <div>
@@ -149,22 +174,50 @@ function EntryForm({ title, value, onSave, onUploadImage }) {
 
       <div>
         <label className="text-sm font-semibold text-gray-500 dark:text-gray-400">Images</label>
-        <label
-          htmlFor={`${inputId}-file`}
-          className={`mt-2 flex h-24 w-full flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-gray-300 text-sm text-gray-500 transition dark:border-white/15 dark:text-gray-400 ${
-            isEditing
-              ? "cursor-pointer hover:border-black dark:hover:border-white"
-              : "cursor-default bg-gray-50 dark:bg-white/5"
+        <div
+          className={`mt-2 rounded-xl border border-dashed border-gray-300 p-3 text-sm text-gray-500 transition dark:border-white/15 dark:text-gray-400 ${
+            isEditing ? "" : "bg-gray-50 dark:bg-white/5"
           }`}
         >
-          <FiUploadCloud className="text-lg" />
-          <span>Drag and drop or click to upload</span>
-          <span className="text-xs text-gray-400 dark:text-gray-500">
+          <div className="grid gap-2 sm:grid-cols-2">
+            <label
+              htmlFor={`${inputId}-camera`}
+              className={`flex h-14 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3 font-semibold text-gray-700 transition dark:border-white/10 dark:bg-[#121212] dark:text-gray-200 ${
+                isEditing
+                  ? "cursor-pointer hover:border-black hover:bg-gray-50 dark:hover:border-white dark:hover:bg-white/10"
+                  : "cursor-default opacity-60"
+              }`}
+            >
+              <FiCamera className="text-lg" />
+              <span>Capture</span>
+            </label>
+            <label
+              htmlFor={`${inputId}-file`}
+              className={`flex h-14 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3 font-semibold text-gray-700 transition dark:border-white/10 dark:bg-[#121212] dark:text-gray-200 ${
+                isEditing
+                  ? "cursor-pointer hover:border-black hover:bg-gray-50 dark:hover:border-white dark:hover:bg-white/10"
+                  : "cursor-default opacity-60"
+              }`}
+            >
+              <FiUploadCloud className="text-lg" />
+              <span>Upload</span>
+            </label>
+          </div>
+          <p className="mt-2 text-center text-xs text-gray-400 dark:text-gray-500">
             {isUploading
               ? "Uploading to Cloudinary..."
-              : formData.screenshotName || "No file selected"}
-          </span>
-        </label>
+              : formData.screenshotName || "No image selected"}
+          </p>
+        </div>
+        <input
+          id={`${inputId}-camera`}
+          type="file"
+          className="sr-only"
+          accept="image/*"
+          capture="environment"
+          disabled={!isEditing}
+          onChange={handleFileChange}
+        />
         <input
           id={`${inputId}-file`}
           type="file"
