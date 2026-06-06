@@ -581,7 +581,7 @@ function MonthlyInsights({ entries }) {
           </div>
         </div>
 
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
           {[
             ["Active days", summary.activeDays.length],
             ["Elapsed days", summary.timing.elapsedDays || summary.timing.daysInMonth],
@@ -590,10 +590,10 @@ function MonthlyInsights({ entries }) {
           ].map(([label, value]) => (
             <div
               key={label}
-              className="rounded-2xl border border-gray-200 bg-[#fcfcfc] p-4 dark:border-white/10 dark:bg-[#101010]"
+              className="rounded-2xl border border-gray-200 bg-[#fcfcfc] p-3 dark:border-white/10 dark:bg-[#101010] sm:p-4"
             >
-              <p className="text-sm text-gray-500 dark:text-gray-400">{label}</p>
-              <p className="mt-2 text-xl font-semibold text-black dark:text-white">
+              <p className="text-xs text-gray-500 dark:text-gray-400 sm:text-sm">{label}</p>
+              <p className="mt-2 text-base font-semibold text-black dark:text-white sm:text-xl">
                 {value}
               </p>
             </div>
