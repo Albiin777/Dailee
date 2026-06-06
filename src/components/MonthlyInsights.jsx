@@ -62,19 +62,88 @@ function getDaysInMonth(year, month) {
   return new Date(year, month + 1, 0).getDate();
 }
 
-function getMonthTiming(year, month, now) {
+function formatDateKey(year, month, day) {
+  return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function formatDateRange(startDate, endDate) {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+  return `${formatter.format(startDate)} - ${formatter.format(endDate)}`;
+}
+
+function parseDateKey(dateKey) {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function getInclusiveDayCount(startKey, endKey) {
+  const startDate = parseDateKey(startKey);
+  const endDate = parseDateKey(endKey);
+  const dayMs = 24 * 60 * 60 * 1000;
+  return Math.floor((endDate - startDate) / dayMs) + 1;
+}
+
+function getPeriodConfig(periodType, year, month, now) {
+  if (periodType === "weekly") {
+    const endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startDate = new Date(endDate);
+    startDate.setDate(endDate.getDate() - 6);
+
+    return {
+      type: periodType,
+      daysInPeriod: 7,
+      label: `Last 7 days (${formatDateRange(startDate, endDate)})`,
+      shortLabel: "Last 7 days",
+      startKey: formatDateKey(
+        startDate.getFullYear(),
+        startDate.getMonth(),
+        startDate.getDate()
+      ),
+      endKey: formatDateKey(endDate.getFullYear(), endDate.getMonth(), endDate.getDate()),
+      fileSlug: `last-7-days-${formatDateKey(
+        endDate.getFullYear(),
+        endDate.getMonth(),
+        endDate.getDate()
+      )}`,
+    };
+  }
+
   const daysInMonth = getDaysInMonth(year, month);
-  const isCurrent = year === now.getFullYear() && month === now.getMonth();
-  const isPast =
-    year < now.getFullYear() ||
-    (year === now.getFullYear() && month < now.getMonth());
-  const elapsedDays = isCurrent ? now.getDate() : isPast ? daysInMonth : 0;
+  const monthLabel = `${monthNames[month]} ${year}`;
 
   return {
-    daysInMonth,
+    type: periodType,
+    year,
+    month,
+    daysInPeriod: daysInMonth,
+    label: monthLabel,
+    shortLabel: monthLabel,
+    startKey: formatDateKey(year, month, 1),
+    endKey: formatDateKey(year, month, daysInMonth),
+    fileSlug: `${year}-${String(month + 1).padStart(2, "0")}`,
+  };
+}
+
+function getPeriodTiming(period, now) {
+  const todayKey = formatDateKey(now.getFullYear(), now.getMonth(), now.getDate());
+  const isCurrent = todayKey >= period.startKey && todayKey <= period.endKey;
+  const isPast = period.endKey < todayKey;
+  const isFuture = period.startKey > todayKey;
+  const elapsedDays = isCurrent
+    ? getInclusiveDayCount(period.startKey, todayKey)
+    : isPast
+      ? period.daysInPeriod
+      : 0;
+
+  return {
+    daysInPeriod: period.daysInPeriod,
     elapsedDays,
-    remainingDays: isCurrent ? daysInMonth - now.getDate() : 0,
+    remainingDays: isCurrent ? period.daysInPeriod - elapsedDays : 0,
     isCurrent,
+    isFuture,
   };
 }
 
@@ -97,20 +166,19 @@ function getTopTerms(textBlocks, limit = 5) {
     .map(([term, count]) => ({ term, count }));
 }
 
-function buildSummary(entries, selectedMonth, selectedYear, now) {
-  const monthPrefix = `${selectedYear}-${String(selectedMonth + 1).padStart(2, "0")}`;
-  const monthEntries = Object.entries(entries)
-    .filter(([dateKey]) => dateKey.startsWith(monthPrefix))
+function buildSummary(entries, period, now) {
+  const periodEntries = Object.entries(entries)
+    .filter(([dateKey]) => dateKey >= period.startKey && dateKey <= period.endKey)
     .sort(([a], [b]) => a.localeCompare(b));
-  const activeDays = monthEntries.filter(([, entry]) => {
+  const activeDays = periodEntries.filter(([, entry]) => {
     return hasText(entry.technical) || hasText(entry.nonTechnical);
   });
-  const technicalDays = monthEntries.filter(([, entry]) => hasText(entry.technical));
-  const nonTechnicalDays = monthEntries.filter(([, entry]) =>
+  const technicalDays = periodEntries.filter(([, entry]) => hasText(entry.technical));
+  const nonTechnicalDays = periodEntries.filter(([, entry]) =>
     hasText(entry.nonTechnical)
   );
-  const timing = getMonthTiming(selectedYear, selectedMonth, now);
-  const basisDays = timing.elapsedDays || timing.daysInMonth;
+  const timing = getPeriodTiming(period, now);
+  const basisDays = timing.elapsedDays;
   const consistencyRate = basisDays ? activeDays.length / basisDays : 0;
   const consistencyLabel =
     activeDays.length === 0
@@ -120,7 +188,7 @@ function buildSummary(entries, selectedMonth, selectedYear, now) {
         : consistencyRate >= 0.4
           ? "Building rhythm"
           : "Getting started";
-  const textBlocks = monthEntries.flatMap(([, entry]) => [
+  const textBlocks = periodEntries.flatMap(([, entry]) => [
     getEntryText(entry.technical),
     getEntryText(entry.nonTechnical),
   ]);
@@ -154,7 +222,7 @@ function createLocalInsight(summary, periodLabel) {
         "Include both what you built and what you learned.",
         "Use specific titles so the report can identify real patterns.",
       ],
-      nextStep: "Save at least three days of entries for a useful monthly insight.",
+      nextStep: "Save at least three days of entries for a useful insight.",
       source: "Local analysis",
     };
   }
@@ -168,13 +236,13 @@ function createLocalInsight(summary, periodLabel) {
         : "technical and reflection work are balanced";
   const timingContext = summary.timing.isCurrent
     ? `${summary.activeDays.length} of ${summary.timing.elapsedDays} elapsed days`
-    : `${summary.activeDays.length} of ${summary.timing.daysInMonth} days`;
+    : `${summary.activeDays.length} of ${summary.timing.daysInPeriod} days`;
 
   return {
     title: `${periodLabel}: ${summary.consistencyLabel}`,
-    summary: `You logged activity on ${timingContext}. The month currently shows ${summary.consistencyLabel.toLowerCase()} with ${balance}. The clearest theme from your notes is ${focus}.`,
+    summary: `You logged activity on ${timingContext}. This period currently shows ${summary.consistencyLabel.toLowerCase()} with ${balance}. The clearest theme from your notes is ${focus}.`,
     takeaways: [
-      `Consistency is based on elapsed days, so ${summary.activeDays.length}/${summary.timing.elapsedDays || summary.timing.daysInMonth} days is the real progress signal.`,
+      `Consistency is based on elapsed days, so ${summary.activeDays.length}/${summary.timing.elapsedDays} days is the real progress signal.`,
       `Main focus detected: ${focus}.`,
       balance.charAt(0).toUpperCase() + balance.slice(1) + ".",
     ],
@@ -199,12 +267,12 @@ function buildGeminiPrompt({ periodLabel, summary }) {
     })
     .join("\n\n");
 
-  return `Analyze this personal diary/monthly activity data for ${periodLabel}.
+  return `Analyze this personal diary activity data for ${periodLabel}.
 
 Context:
 - Active days: ${summary.activeDays.length}
-- Elapsed days considered: ${summary.timing.elapsedDays || summary.timing.daysInMonth}
-- Remaining days in month: ${summary.timing.remainingDays}
+- Elapsed days considered: ${summary.timing.elapsedDays}
+- Remaining days in period: ${summary.timing.remainingDays}
 - Technical entries: ${summary.technicalDays.length}
 - Non-technical entries: ${summary.nonTechnicalDays.length}
 
@@ -294,7 +362,7 @@ function wrapText(text, maxLength = 78) {
   return lines.length ? lines : [""];
 }
 
-function createPdfBlob({ periodLabel, summary, insight }) {
+function createPdfBlob({ periodLabel, periodType, summary, insight }) {
   const pageWidth = 612;
   const pageHeight = 792;
   const margin = 46;
@@ -337,7 +405,7 @@ function createPdfBlob({ periodLabel, summary, insight }) {
     size: 13,
     rgb: [1, 1, 1],
   });
-  text("Monthly Insights Report", margin, pageHeight - 76, {
+  text(`${periodType === "weekly" ? "Weekly" : "Monthly"} Insights Report`, margin, pageHeight - 76, {
     bold: true,
     size: 24,
     rgb: [1, 1, 1],
@@ -351,7 +419,7 @@ function createPdfBlob({ periodLabel, summary, insight }) {
   let y = pageHeight - 148;
   const metrics = [
     ["Active days", summary.activeDays.length],
-    ["Elapsed days", summary.timing.elapsedDays || summary.timing.daysInMonth],
+    ["Elapsed days", summary.timing.elapsedDays],
     ["Consistency", `${Math.round(summary.consistencyRate * 100)}%`],
     ["Remaining", summary.timing.remainingDays],
   ];
@@ -456,14 +524,19 @@ function createPdfBlob({ periodLabel, summary, insight }) {
 
 function MonthlyInsights({ entries }) {
   const now = new Date();
+  const [periodType, setPeriodType] = useState("monthly");
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth());
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
   const [aiInsight, setAiInsight] = useState(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [aiError, setAiError] = useState("");
+  const period = useMemo(
+    () => getPeriodConfig(periodType, selectedYear, selectedMonth, now),
+    [periodType, selectedYear, selectedMonth, now]
+  );
   const summary = useMemo(
-    () => buildSummary(entries, selectedMonth, selectedYear, now),
-    [entries, selectedMonth, selectedYear, now]
+    () => buildSummary(entries, period, now),
+    [entries, period, now]
   );
   const years = useMemo(() => {
     const entryYears = Object.keys(entries).map((dateKey) => Number(dateKey.slice(0, 4)));
@@ -471,7 +544,7 @@ function MonthlyInsights({ entries }) {
     const max = Math.max(now.getFullYear(), ...entryYears);
     return Array.from({ length: max - min + 1 }, (_, index) => min + index);
   }, [entries, now]);
-  const periodLabel = `${monthNames[selectedMonth]} ${selectedYear}`;
+  const periodLabel = period.label;
   const localInsight = useMemo(
     () => createLocalInsight(summary, periodLabel),
     [summary, periodLabel]
@@ -481,7 +554,7 @@ function MonthlyInsights({ entries }) {
   useEffect(() => {
     setAiInsight(null);
     setAiError("");
-  }, [periodLabel, summary.activeDays.length]);
+  }, [periodType, periodLabel, summary.activeDays.length]);
 
   const handleGenerateAi = async () => {
     setIsGenerating(true);
@@ -497,11 +570,11 @@ function MonthlyInsights({ entries }) {
   };
 
   const handleDownloadPdf = () => {
-    const blob = createPdfBlob({ periodLabel, summary, insight });
+    const blob = createPdfBlob({ periodLabel, periodType, summary, insight });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `dailee-insights-${selectedYear}-${String(selectedMonth + 1).padStart(2, "0")}.pdf`;
+    link.download = `dailee-insights-${period.fileSlug}.pdf`;
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -513,37 +586,60 @@ function MonthlyInsights({ entries }) {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-sm font-semibold uppercase text-gray-500 dark:text-gray-400">
-            Monthly Report
+            {periodType === "weekly" ? "Weekly Report" : "Monthly Report"}
           </p>
           <h2 className="mt-1 text-2xl font-semibold text-black dark:text-white">
             Insights Summary
           </h2>
         </div>
         <div className="flex flex-wrap gap-2">
-          <select
-            className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-black focus:border-black focus:outline-none dark:border-white/10 dark:bg-[#121212] dark:text-white dark:focus:border-white"
-            value={selectedMonth}
-            onChange={(event) => setSelectedMonth(Number(event.target.value))}
-            aria-label="Select month"
-          >
-            {monthNames.map((month, index) => (
-              <option key={month} value={index}>
-                {month}
-              </option>
+          <div className="inline-flex rounded-xl border border-gray-200 bg-white p-1 dark:border-white/10 dark:bg-[#121212]">
+            {[
+              ["monthly", "Monthly"],
+              ["weekly", "Weekly"],
+            ].map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setPeriodType(value)}
+                className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition ${
+                  periodType === value
+                    ? "bg-[#1f1f1f] text-white dark:bg-white dark:text-black"
+                    : "text-gray-600 hover:bg-black/5 dark:text-gray-300 dark:hover:bg-white/10"
+                }`}
+              >
+                {label}
+              </button>
             ))}
-          </select>
-          <select
-            className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-black focus:border-black focus:outline-none dark:border-white/10 dark:bg-[#121212] dark:text-white dark:focus:border-white"
-            value={selectedYear}
-            onChange={(event) => setSelectedYear(Number(event.target.value))}
-            aria-label="Select year"
-          >
-            {years.map((year) => (
-              <option key={year} value={year}>
-                {year}
-              </option>
-            ))}
-          </select>
+          </div>
+          {periodType === "monthly" && (
+            <>
+              <select
+                className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-black focus:border-black focus:outline-none dark:border-white/10 dark:bg-[#121212] dark:text-white dark:focus:border-white"
+                value={selectedMonth}
+                onChange={(event) => setSelectedMonth(Number(event.target.value))}
+                aria-label="Select month"
+              >
+                {monthNames.map((month, index) => (
+                  <option key={month} value={index}>
+                    {month}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-black focus:border-black focus:outline-none dark:border-white/10 dark:bg-[#121212] dark:text-white dark:focus:border-white"
+                value={selectedYear}
+                onChange={(event) => setSelectedYear(Number(event.target.value))}
+                aria-label="Select year"
+              >
+                {years.map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
           <button
             type="button"
             onClick={handleGenerateAi}
@@ -571,12 +667,16 @@ function MonthlyInsights({ entries }) {
           </div>
           <div>
             <h3 className="text-lg font-semibold text-black dark:text-white">
-              {periodLabel}
+              {period.shortLabel}
             </h3>
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              {summary.timing.isCurrent
-                ? `${summary.timing.remainingDays} days remaining this month.`
-                : "Report uses the full selected month."}
+              {periodType === "weekly"
+                ? "Activity from the last 7 days."
+                : summary.timing.isFuture
+                ? `This selected ${periodType === "weekly" ? "week" : "month"} has not started yet.`
+                : summary.timing.isCurrent
+                  ? `${summary.timing.remainingDays} days remaining this ${periodType === "weekly" ? "week" : "month"}.`
+                  : `Report uses the full selected ${periodType === "weekly" ? "week" : "month"}.`}
             </p>
           </div>
         </div>
@@ -584,7 +684,7 @@ function MonthlyInsights({ entries }) {
         <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
           {[
             ["Active days", summary.activeDays.length],
-            ["Elapsed days", summary.timing.elapsedDays || summary.timing.daysInMonth],
+            ["Elapsed days", summary.timing.elapsedDays],
             ["Consistency", `${Math.round(summary.consistencyRate * 100)}%`],
             ["Status", summary.consistencyLabel],
           ].map(([label, value]) => (
